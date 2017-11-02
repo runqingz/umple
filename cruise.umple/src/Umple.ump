@@ -237,6 +237,9 @@ class Constant
   // The value of the constant.
   value;
 
+  //Issue 322 - by default set internal to false
+  Boolean isInternal = false;
+  
   class UniqueIdentifier { }
 }
 
@@ -467,6 +470,7 @@ class CodeInjection
   * -> 1 UmpleClassifier;
   1 -> 0..1 ConstraintTree;
   lazy Position position;
+  lazy Position codePosition;
   Boolean isInternal = false;
 }
 

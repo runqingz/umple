@@ -2982,6 +2982,14 @@ private Boolean checkIsDistributed(UmpleInterface uInterface)
       setFailedPosition(constantToken.getPosition(), 161, constantToken.getValue("name"));
     }
 
+    boolean isInternal = constantToken.getValue("internal") != null;
+    if(isInternal){
+        aConstant.setIsInternal(true);
+    }
+    else{
+        aConstant.setIsInternal(false);
+    }
+
     // Create the Constant Object
     for(Token token : constantToken.getSubTokens())
     {
@@ -3445,12 +3453,17 @@ private Boolean checkIsDistributed(UmpleInterface uInterface)
         if(langs.size()==0)
         {
           cb.setCode(sub.getValue());
+          injection.setCodePosition(sub.getPosition());
         }
         else
         {
           for(String lang:langs)
             {
-            cb.setCode(lang,sub.getValue());
+                cb.setCode(lang,sub.getValue());
+                if("Java".equals(lang))
+                {
+                  injection.setCodePosition(sub.getPosition());
+                }
             }
         }
         langs.clear();      
