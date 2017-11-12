@@ -1,0 +1,126 @@
+/*
+
+Copyright: All contributers to the Umple Project
+
+This file is made available subject to the open source license found at:
+http://umple.org/license
+
+Code for methods mixed into the UmpleSync.ump model
+
+*/
+
+namespace cruise.umple.sync;
+
+class NewTransitionAction{
+	  public void go()
+	  {
+	    boolean shouldContinue = true;
+	    
+	    if (shouldContinue)
+	    {
+	      shouldContinue = addTransitionDescription();  
+	    }
+	  }
+	  
+	     private boolean addTransitionDescription()
+      {
+            try
+            {
+              TextParser textParser = new TextParser(getUmpleCode());
+              File umpleFile = new File(getFilename());    
+              UmpleModel umpleModel = new UmpleModel( new UmpleFile(umpleFile) );
+              cruise.umple.parser.analysis.RuleBasedParser parser = new cruise.umple.parser.analysis.RuleBasedParser();
+              UmpleParser umpleParser = new UmpleInternalParser("UmpleInternalParser", umpleModel, parser);
+              ParseResult result = parser.parse(umpleFile);
+              
+              if (!result.getWasSuccess())
+              {
+                //Uncomment for debug
+                textParser.insert("//Unable to update umple code due to error at " + result.getPosition() + "\n");
+                setUmpleCode(textParser.getText());
+                return false;
+              }
+              
+              result = umpleParser.analyze(false);
+              
+              if (!result.getWasSuccess())
+              {
+                //Uncomment for debug
+                //textParser.insert("//Unable to update umple code due to error at " + result.getPosition() + "\n");
+                //setUmpleCode(textParser.getText());
+                return false;
+              }
+              
+              JsonParser jsonParser = new JsonParser("json");
+              jsonParser.parse("json", getDeltaCode());
+              
+              Json json = jsonParser.analyze();
+              
+              String fromStateId = json.getValue("fromStateId");
+              String event = json.getValue("eventName");
+              String toStateId = json.getValue("toStateId");
+              Token addAfterLastTransition = null;
+              
+              for(Token t : umpleParser.getRootToken().getSubTokens())
+              {
+                if (!t.is("classDefinition"))
+                {
+                  continue;
+                }
+                
+                for (Token subT: t.getSubTokens())
+                {
+                    if(subT.is("state"))
+                    {
+                        nestedState(subT, fromStateId, addAfterLastTransition);
+                    }
+                }
+              }
+              String newTransition = StringFormatter.format(" {0} -> {1};\n", event, toStateId);
+              textParser.insertAfter(addAfterLastTransition, newTransition);
+              setUmpleCode(textParser.getText());
+              return true;
+            }
+            catch (Exception e)
+            {
+              return handleException(e);
+            }
+      }
+	  
+	  private void nestedState(Token stateToken, String fromStateId, Token addAfterLastTransition)
+      {
+            int i = 0;
+            for(Token subT : stateToken.getSubTokens())
+            {
+              if (subT.is("state") && !fromStateId.equals(stateToken.get("stateName")))
+              {
+                nestedState(subT, fromStateId, addAfterLastTransition);
+                return;
+              }
+            
+              if (subT.is("extendsName"))
+              {
+                addAfterLastTransition = t.getSubToken(i+1); // ";" is not included in the "extendsName" token
+              }
+                  
+              if (addAfterLastTransition == null || subT.isStatic("{") || subT.is("inlineAssociation") || subT.is("attribute")) // TODO }
+              {
+                addAfterLastTransition = subT;
+              }
+              ++i;
+            }
+            return;    
+      }
+      
+      private boolean handleException(Exception e)
+      {
+            String output = "FATAL ERROR PARSING UMPLE DIAGRAM\n\n";
+            
+            for (StackTraceElement trace : e.getStackTrace())
+            {
+              output += trace.toString() + "\n";
+            }
+            setUmpleCode(output);
+            return false;
+      }
+}
