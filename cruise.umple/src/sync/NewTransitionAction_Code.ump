@@ -11,7 +11,8 @@ Code for methods mixed into the UmpleSync.ump model
 
 namespace cruise.umple.sync;
 
-class NewTransitionAction{
+class NewTransitionAction
+{
 	  public void go()
 	  {
 	    boolean shouldContinue = true;
@@ -60,6 +61,7 @@ class NewTransitionAction{
               String event = json.getValue("eventName");
               String toStateId = json.getValue("toStateId");
               Token addAfterLastTransition = null;
+              boolean didFindPostion = false;
               
               for(Token t : umpleParser.getRootToken().getSubTokens())
               {
@@ -70,14 +72,24 @@ class NewTransitionAction{
                 
                 for (Token subT: t.getSubTokens())
                 {
-                    if(subT.is("state"))
+                    if(subT.is("stateMachine"))
                     {
-                        nestedState(subT, fromStateId, addAfterLastTransition);
+                    		for (Token stateMSubT: subT.getSubTokens()) 
+                    		{
+                    			if (stateMSubT.is("inlineStateMachine")) 
+                    			{
+                    				
+                    				for (Token stateSubT: stateMSubT.getSubTokens()) {
+                    					if(stateSubT.is("state")&&!didFindPostion) {
+                    						didFindPostion = nestedState(stateSubT, fromStateId, textParser, event, toStateId);
+                    					}	
+                    				}
+                    			}	
+                    		} 
                     }
                 }
               }
-              String newTransition = StringFormatter.format(" {0} -> {1};\n", event, toStateId);
-              textParser.insertAfter(addAfterLastTransition, newTransition);
+              
               setUmpleCode(textParser.getText());
               return true;
             }
@@ -87,30 +99,36 @@ class NewTransitionAction{
             }
       }
 	  
-	  private void nestedState(Token stateToken, String fromStateId, Token addAfterLastTransition)
-      {
-            int i = 0;
-            for(Token subT : stateToken.getSubTokens())
-            {
-              if (subT.is("state") && !fromStateId.equals(stateToken.get("stateName")))
-              {
-                nestedState(subT, fromStateId, addAfterLastTransition);
-                return;
-              }
+	  private boolean nestedState(Token stateToken, String fromStateId, TextParser parser, String event, String toStateId){
+    		int i = 0;
+   		Token addAfterLastTransition = null;
+   		boolean didFindPosition = false;
+        for(Token subT : stateToken.getSubTokens())
+        {
+          if (subT.is("state") && !fromStateId.equals(stateToken.getValue("stateName")))
+          {
+            didFindPosition = didFindPosition ||  nestedState(subT, fromStateId, parser, event, toStateId);
+          }
             
-              if (subT.is("extendsName"))
-              {
-                addAfterLastTransition = t.getSubToken(i+1); // ";" is not included in the "extendsName" token
-              }
+          if (subT.is("extendsName"))
+          {
+            addAfterLastTransition = subT.getSubToken(i+1); // ";" is not included in the "extendsName" token
+          }
                   
-              if (addAfterLastTransition == null || subT.isStatic("{") || subT.is("inlineAssociation") || subT.is("attribute")) // TODO }
-              {
-                addAfterLastTransition = subT;
-              }
-              ++i;
-            }
-            return;    
-      }
+          if (addAfterLastTransition == null || subT.isStatic("{") || subT.is("transition")) // TODO }
+          {
+           addAfterLastTransition = subT;
+          }
+          ++i;
+        }
+        
+        if(fromStateId.equals(stateToken.getValue("stateName"))) {
+        		String newTransition = StringFormatter.format(" {0} -> {1};\n", event, toStateId);
+            parser.insertAfter(addAfterLastTransition, newTransition);
+            return true;
+        }
+        return didFindPosition;
+  }
       
       private boolean handleException(Exception e)
       {
